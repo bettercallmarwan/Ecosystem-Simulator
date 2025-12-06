@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 // ============================================
-// FUNCTIONAL PROGRAMMING APPROACH
+// FUNCTIONAL (declarative) PROGRAMMING APPROACH
 // ============================================
 
 
