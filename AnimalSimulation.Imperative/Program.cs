@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-
-// ============================================
+﻿// ============================================
 // IMPERATIVE PROGRAMMING APPROACH
 // ============================================
-
 
 namespace ImperativeAnimalSimulation
 {
@@ -168,11 +164,10 @@ namespace ImperativeAnimalSimulation
                 animal.Pos.Y = newPos.Y;
             }
 
-            // moving costs energy
             animal.Energy -= 1;
         }
 
-        // herbivore tries to eat plant
+        // herbivores try to eat plant
         private void HerbivoreEat(Animal herbivore)
         {
             for (int i = plants.Count - 1; i >= 0; i--)
@@ -197,7 +192,7 @@ namespace ImperativeAnimalSimulation
                     !eatenIds.Contains(animals[i].Id))
                 {
                     carnivore.Energy += 30;
-                    events.Add($"Carnivore #{carnivore.Id} ate Herbivore #{animals[i].Id} at point ({carnivore.Pos.X}, {carnivore.Pos.Y}).");
+                    events.Add($"Carnivore #{carnivore.Id} ate Herbivore with id #{animals[i].Id} at point ({carnivore.Pos.X}, {carnivore.Pos.Y}).");
                     eatenIds.Add(animals[i].Id);
                     break;
                 }
@@ -401,13 +396,13 @@ namespace ImperativeAnimalSimulation
             {
                 sim.Step();
                 sim.Display();
-                System.Threading.Thread.Sleep(2000);
+                Thread.Sleep(2000);
 
                 if (sim.GetAnimalCount() == 0)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine("\n═══════════════════════════════════════════════");
-                    Console.WriteLine("All animals died! Ecosystem collapsed.");
+                    Console.WriteLine("All animals are dead, Ecosystem collapsed.");
                     Console.WriteLine("═══════════════════════════════════════════════");
                     Console.ResetColor();
                     break;

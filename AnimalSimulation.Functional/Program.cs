@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-// ============================================
+﻿// ============================================
 // FUNCTIONAL (declarative) PROGRAMMING APPROACH
 // ============================================
-
 
 namespace FunctionalAnimalSimulation
 {
@@ -86,7 +81,7 @@ namespace FunctionalAnimalSimulation
         // get valid neighbors posistions
         private static IEnumerable<Position> GetNeighbors(Position pos, int width, int height, IEnumerable<Obstacle> obstacles)
         {
-            var directions = new[] { (-1, 0), (1, 0), (0, -1), (0, 1) };
+            var directions = new[] { (-1, 0), (1, 0), (0, -1), (0, 1) }; // used tuples because its more readable
             var obstaclePositions = new HashSet<Position>(obstacles.Select(o => o.Pos));
 
             return directions
