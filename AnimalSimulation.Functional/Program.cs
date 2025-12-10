@@ -1,10 +1,5 @@
-﻿// ============================================
-// FUNCTIONAL (declarative) PROGRAMMING APPROACH
-// ============================================
-
-namespace FunctionalAnimalSimulation
+﻿namespace FunctionalAnimalSimulation
 {
-    // immutable record types
     public record Position(int X, int Y);
 
     public enum AnimalType { Herbivore, Carnivore }
@@ -27,18 +22,19 @@ namespace FunctionalAnimalSimulation
         IReadOnlyList<Plant> Plants,
         IReadOnlyList<Obstacle> Obstacles,
         IReadOnlyList<SimulationEvent> Events,
-        int Turn
+        int Turn,
+        Random Rng
     );
 
     public static class FunctionalSimulation
     {
-        private static Random _random = new Random();
-
         public static SimulationState Initialize(int width, int height, int herbivoreCount, int carnivoreCount, int plantCount, int obstacleCount)
         {
+            var random = new Random();
+
             var herbivores = Enumerable.Range(0, herbivoreCount)
                 .Select(id => new Animal(
-                    new Position(_random.Next(width), _random.Next(height)),
+                    new Position(random.Next(width), random.Next(height)),
                     50,
                     id,
                     AnimalType.Herbivore
@@ -47,7 +43,7 @@ namespace FunctionalAnimalSimulation
 
             var carnivores = Enumerable.Range(herbivoreCount, carnivoreCount)
                 .Select(id => new Animal(
-                    new Position(_random.Next(width), _random.Next(height)),
+                    new Position(random.Next(width), random.Next(height)),
                     50,
                     id,
                     AnimalType.Carnivore
@@ -58,17 +54,17 @@ namespace FunctionalAnimalSimulation
 
             var plants = Enumerable.Range(0, plantCount)
                 .Select(_ => new Plant(
-                    new Position(_random.Next(width), _random.Next(height))
+                    new Position(random.Next(width), random.Next(height))
                 ))
                 .ToList();
 
             var obstacles = Enumerable.Range(0, obstacleCount)
                 .Select(_ => new Obstacle(
-                    new Position(_random.Next(width), _random.Next(height))
+                    new Position(random.Next(width), random.Next(height))
                 ))
                 .ToList();
 
-            return new SimulationState(width, height, allAnimals, plants, obstacles, new List<SimulationEvent>(), 0);
+            return new SimulationState(width, height, allAnimals, plants, obstacles, new List<SimulationEvent>(), 0, random);
         }
 
         private static IEnumerable<Position> GetNeighbors(Position pos, int width, int height, IEnumerable<Obstacle> obstacles)
@@ -81,31 +77,26 @@ namespace FunctionalAnimalSimulation
                 .Where(p => p.X >= 0 && p.X < width && p.Y >= 0 && p.Y < height && !obstaclePositions.Contains(p));
         }
 
-        #region Moving animals using recursion
-        private static Animal MoveAnimal(Animal animal, int width, int height, IEnumerable<Obstacle> obstacles)
+        private static Animal MoveAnimal(Animal animal, int width, int height, IEnumerable<Obstacle> obstacles, Random rng)
         {
             var neighbors = GetNeighbors(animal.Pos, width, height, obstacles).ToList();
             if (neighbors.Count == 0) return animal.ChangeEnergy(-1);
 
-            var newPos = neighbors[_random.Next(neighbors.Count)];
+            var newPos = neighbors[rng.Next(neighbors.Count)];
             return animal.Move(newPos).ChangeEnergy(-1);
         }
 
-        // move anmals using recursion
-        private static List<Animal> MoveAnimalsRecursive(IReadOnlyList<Animal> animals, int index, int width, int height, IEnumerable<Obstacle> obstacles, List<Animal> accumulated)
+        private static List<Animal> MoveAnimalsRecursive(IReadOnlyList<Animal> animals, int index, int width, int height, IEnumerable<Obstacle> obstacles, Random rng)
         {
-            // base case
             if (index >= animals.Count)
-                return accumulated;
+                return new List<Animal>();
 
-            var movedAnimal = MoveAnimal(animals[index], width, height, obstacles);
-            accumulated.Add(movedAnimal);
+            var movedAnimal = MoveAnimal(animals[index], width, height, obstacles, rng);
+            var remainingMoved = MoveAnimalsRecursive(animals, index + 1, width, height, obstacles, rng);
 
-            return MoveAnimalsRecursive(animals, index + 1, width, height, obstacles, accumulated);
+            return new[] { movedAnimal }.Concat(remainingMoved).ToList();
         }
-        #endregion
 
-        #region Feed herbivores using recursion
         private static (Animal updatedAnimal, bool atePlant) HerbivoreEat(Animal animal, IEnumerable<Plant> plants)
         {
             var hasPlant = plants.Any(p => p.Pos == animal.Pos);
@@ -114,31 +105,30 @@ namespace FunctionalAnimalSimulation
                 : (animal, false);
         }
 
-        // feed herbivores using recursion
         private static (List<Animal> fedHerbivores, HashSet<Position> eatenPlants, List<SimulationEvent> events)
-            FeedHerbivoresRecursive(IReadOnlyList<Animal> herbivores, int index, IReadOnlyList<Plant> plants,
-                                   List<Animal> accumulated, HashSet<Position> eatenPlants, List<SimulationEvent> events)
+            FeedHerbivoresRecursive(IReadOnlyList<Animal> herbivores, int index, IReadOnlyList<Plant> plants)
         {
-            // base case
             if (index >= herbivores.Count)
-                return (accumulated, eatenPlants, events);
+                return (new List<Animal>(), new HashSet<Position>(), new List<SimulationEvent>());
 
             var herb = herbivores[index];
             var (updatedHerb, atePlant) = HerbivoreEat(herb, plants);
 
+            var (restAnimals, restEatenPlants, restEvents) = FeedHerbivoresRecursive(herbivores, index + 1, plants);
+
+            var allAnimals = new[] { updatedHerb }.Concat(restAnimals).ToList();
+            var allEatenPlants = new HashSet<Position>(restEatenPlants);
+            var allEvents = new List<SimulationEvent>(restEvents);
+
             if (atePlant)
             {
-                eatenPlants.Add(herb.Pos);
-                events.Add(new SimulationEvent($"Herbivore #{herb.Id} ate a plant at point ({herb.Pos.X}, {herb.Pos.Y})."));
+                allEatenPlants.Add(herb.Pos);
+                allEvents.Insert(0, new SimulationEvent($"Herbivore #{herb.Id} ate a plant at point ({herb.Pos.X}, {herb.Pos.Y})."));
             }
 
-            accumulated.Add(updatedHerb);
-
-            return FeedHerbivoresRecursive(herbivores, index + 1, plants, accumulated, eatenPlants, events);
+            return (allAnimals, allEatenPlants, allEvents);
         }
-        #endregion
 
-        #region Feed carnivores using recursion
         private static (Animal updatedCarnivore, Animal? eatenHerbivore) CarnivoreEat(Animal carnivore, IEnumerable<Animal> herbivores)
         {
             var prey = herbivores.FirstOrDefault(h => h.Pos == carnivore.Pos && h.Type == AnimalType.Herbivore);
@@ -147,31 +137,30 @@ namespace FunctionalAnimalSimulation
                 : (carnivore, null);
         }
 
-        // feed carnivores using recursion
         private static (List<Animal> fedCarnivores, HashSet<int> eatenHerbivoreIds, List<SimulationEvent> events)
-            FeedCarnivoresRecursive(IReadOnlyList<Animal> carnivores, int index, IReadOnlyList<Animal> herbivores,
-                                   List<Animal> accumulated, HashSet<int> eatenIds, List<SimulationEvent> events)
+            FeedCarnivoresRecursive(IReadOnlyList<Animal> carnivores, int index, IReadOnlyList<Animal> herbivores)
         {
-            // base case
             if (index >= carnivores.Count)
-                return (accumulated, eatenIds, events);
+                return (new List<Animal>(), new HashSet<int>(), new List<SimulationEvent>());
 
             var carn = carnivores[index];
             var (updatedCarn, eatenPrey) = CarnivoreEat(carn, herbivores);
 
+            var (restAnimals, restEatenIds, restEvents) = FeedCarnivoresRecursive(carnivores, index + 1, herbivores);
+
+            var allAnimals = new[] { updatedCarn }.Concat(restAnimals).ToList();
+            var allEatenIds = new HashSet<int>(restEatenIds);
+            var allEvents = new List<SimulationEvent>(restEvents);
+
             if (eatenPrey != null)
             {
-                eatenIds.Add(eatenPrey.Id);
-                events.Add(new SimulationEvent($"Carnivore #{carn.Id} ate Herbivore #{eatenPrey.Id} at point ({carn.Pos.X}, {carn.Pos.Y})."));
+                allEatenIds.Add(eatenPrey.Id);
+                allEvents.Insert(0, new SimulationEvent($"Carnivore #{carn.Id} ate Herbivore #{eatenPrey.Id} at point ({carn.Pos.X}, {carn.Pos.Y})."));
             }
 
-            accumulated.Add(updatedCarn);
-
-            return FeedCarnivoresRecursive(carnivores, index + 1, herbivores, accumulated, eatenIds, events);
+            return (allAnimals, allEatenIds, allEvents);
         }
-        #endregion
 
-        #region Animals reproduce using recursion
         private static IEnumerable<Animal> TryReproduce(Animal animal, int nextId)
         {
             int threshold = animal.Type == AnimalType.Herbivore ? 60 : 80;
@@ -184,78 +173,70 @@ namespace FunctionalAnimalSimulation
 
             return new[] { animal };
         }
-        // reproduce animals
+
         private static (List<Animal> allAnimals, List<SimulationEvent> events, int nextId)
-            ReproduceAnimalsRecursive(IReadOnlyList<Animal> animals, int index, int nextId,
-                                     List<Animal> accumulated, List<SimulationEvent> events)
+            ReproduceAnimalsRecursive(IReadOnlyList<Animal> animals, int index, int nextId)
         {
-            // base case
             if (index >= animals.Count)
-                return (accumulated, events, nextId);
+                return (new List<Animal>(), new List<SimulationEvent>(), nextId);
 
             var animal = animals[index];
             var offspring = TryReproduce(animal, nextId).ToList();
 
-            accumulated.AddRange(offspring);
+            var newNextId = offspring.Count > 1 ? nextId + 1 : nextId;
+            var (restAnimals, restEvents, finalNextId) = ReproduceAnimalsRecursive(animals, index + 1, newNextId);
+
+            var allAnimals = offspring.Concat(restAnimals).ToList();
+            var allEvents = new List<SimulationEvent>(restEvents);
 
             if (offspring.Count > 1)
             {
                 var animalType = animal.Type == AnimalType.Herbivore ? "Herbivore" : "Carnivore";
-                events.Add(new SimulationEvent($"{animalType} #{animal.Id} reproduced an offspring with id (#{offspring[1].Id}) at point ({animal.Pos.X}, {animal.Pos.Y})."));
-                nextId++;
+                allEvents.Insert(0, new SimulationEvent($"{animalType} #{animal.Id} reproduced an offspring with id (#{offspring[1].Id}) at point ({animal.Pos.X}, {animal.Pos.Y})."));
             }
 
-            return ReproduceAnimalsRecursive(animals, index + 1, nextId, accumulated, events);
-        } 
-        #endregion
+            return (allAnimals, allEvents, finalNextId);
+        }
 
         public static SimulationState Step(SimulationState state)
         {
             var events = new List<SimulationEvent>();
 
-            // move all animals using recursion
-            var movedAnimals = MoveAnimalsRecursive(state.Animals, 0, state.Width, state.Height, state.Obstacles, new List<Animal>());
+            var movedAnimals = MoveAnimalsRecursive(state.Animals, 0, state.Width, state.Height, state.Obstacles, state.Rng);
 
             var herbivores = movedAnimals.Where(a => a.Type == AnimalType.Herbivore).ToList();
             var carnivores = movedAnimals.Where(a => a.Type == AnimalType.Carnivore).ToList();
 
-            // feed herbivores using recursion
             var (fedHerbivores, eatenPlantPositions, herbEvents) =
-                FeedHerbivoresRecursive(herbivores, 0, state.Plants, new List<Animal>(), new HashSet<Position>(), new List<SimulationEvent>());
+                FeedHerbivoresRecursive(herbivores, 0, state.Plants);
             events.AddRange(herbEvents);
 
-            // remove eaten plants
             var remainingPlants = state.Plants
                 .Where(p => !eatenPlantPositions.Contains(p.Pos))
                 .ToList();
 
-            // feed carnivores using recursion
             var (fedCarnivores, eatenHerbivoreIds, carnEvents) =
-                FeedCarnivoresRecursive(carnivores, 0, fedHerbivores, new List<Animal>(), new HashSet<int>(), new List<SimulationEvent>());
+                FeedCarnivoresRecursive(carnivores, 0, fedHerbivores);
             events.AddRange(carnEvents);
 
-            // remove eaten herbivores
             var remainingHerbivores = fedHerbivores
                 .Where(h => !eatenHerbivoreIds.Contains(h.Id))
                 .ToList();
 
             var allFedAnimals = remainingHerbivores.Concat(fedCarnivores).ToList();
 
-            // reproduce
             var nextId = state.Animals.Any() ? state.Animals.Max(a => a.Id) + 1 : 0;
             var (reproducedAnimals, reproEvents, finalNextId) =
-                ReproduceAnimalsRecursive(allFedAnimals, 0, nextId, new List<Animal>(), new List<SimulationEvent>());
+                ReproduceAnimalsRecursive(allFedAnimals, 0, nextId);
             events.AddRange(reproEvents);
 
-            // remove dead animals
             var aliveAnimals = reproducedAnimals
                 .Where(a => a.Energy > 0)
                 .ToList();
 
-            // spawn new plants
-            int newPlantCount = _random.Next(1, 8);
+            int newPlantCount = state.Rng.Next(1, 8);
             var newPlants = Enumerable.Range(0, newPlantCount)
-                .Select(_ => new Plant(new Position(_random.Next(state.Width), _random.Next(state.Height))))
+                .Select(_ => new Plant(new Position(state.Rng.Next(state.Width), state.Rng.Next(state.Height))))
                 .ToList();
 
             var allPlants = remainingPlants.Concat(newPlants).ToList();
@@ -268,7 +249,8 @@ namespace FunctionalAnimalSimulation
                 allPlants,
                 state.Obstacles,
                 events,
-                state.Turn + 1
+                state.Turn + 1,
+                state.Rng
             );
         }
 
